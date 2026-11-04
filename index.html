@@ -1,0 +1,857 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Pace Reader</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Literata:opsz,wght@7..72,400;7..72,600&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<style>
+/* Layout: one reading column under a stopwatch bar. A yellow marker travels through the text and leaves teal behind it. */
+:root {
+  --paper: #f1f5f7; --surface: #ffffff; --ink: #17232e; --muted: #566773; --line: #d3dde3;
+  --accent: #0e6573; --on-accent: #ffffff; --tint: #e3edf0;
+  --marker: #ffe45c; --marker-ink: #17232e; --done-ink: #0e6573; --done-bg: #d9eef0;
+  --danger: #b3261e;
+  --font-read: "Literata", Georgia, "Times New Roman", serif;
+  --font-ui: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", Meiryo, sans-serif;
+  --font-num: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  --read-size: 20px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #10181f; --surface: #18232c; --ink: #e6edf1; --muted: #9bacb8; --line: #2d3c47;
+    --accent: #62c6d2; --on-accent: #08252b; --tint: #1f2e38;
+    --marker: #f2d544; --marker-ink: #17232e; --done-ink: #86d6df; --done-bg: #17353c;
+    --danger: #ff8f86; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #10181f; --surface: #18232c; --ink: #e6edf1; --muted: #9bacb8; --line: #2d3c47;
+  --accent: #62c6d2; --on-accent: #08252b; --tint: #1f2e38;
+  --marker: #f2d544; --marker-ink: #17232e; --done-ink: #86d6df; --done-bg: #17353c;
+  --danger: #ff8f86; color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font-family: var(--font-ui); font-size: 15px; line-height: 1.6;
+}
+body::before {
+  content: ""; position: fixed; inset: 0 0 auto; z-index: 10;
+  height: env(safe-area-inset-top, 0px); background: var(--paper);
+}
+.wrap {
+  max-width: 1120px; margin-inline: auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+button, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: .45; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+h1, h2, p { margin: 0; }
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; padding: 8px 16px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--surface); font-weight: 500;
+}
+.btn:hover:not(:disabled) { border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 700; }
+.btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
+.btn.quiet { background: transparent; }
+.btn.danger { color: var(--danger); }
+.btn.armed { background: var(--danger); border-color: var(--danger); color: var(--surface); }
+kbd {
+  font-family: var(--font-num); font-size: 11px; padding: 1px 5px; border-radius: 4px;
+  border: 1px solid currentColor; opacity: .75; white-space: nowrap;
+}
+
+/* App header */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 14px; }
+.brand { font-family: var(--font-read); font-weight: 600; font-size: 22px; letter-spacing: -.01em; }
+.brand mark { background: var(--marker); color: var(--marker-ink); padding: 0 .18em; }
+.nav { display: flex; gap: 4px; }
+.nav button {
+  min-height: 40px; padding: 4px 14px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-weight: 500;
+}
+.nav button[aria-current="page"] { background: var(--tint); color: var(--ink); font-weight: 700; }
+
+/* Input view */
+.compose { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; padding-bottom: 40px; align-items: start; }
+.col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.col-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 36px; }
+.col-head h2, .col-head label { font-size: 15px; font-weight: 700; }
+.tag { font-size: 12px; color: var(--muted); }
+#text {
+  width: 100%; height: 340px; resize: vertical; padding: 14px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--surface);
+  font-family: var(--font-read); font-size: 16px; line-height: 1.6;
+}
+.counts { display: flex; flex-wrap: wrap; gap: 4px 18px; color: var(--muted); font-size: 14px; }
+.counts b { font-family: var(--font-num); font-weight: 600; color: var(--ink); font-size: 16px; }
+.modes { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.modes button { flex: 1; min-height: 44px; border: 0; background: transparent; color: var(--muted); font-weight: 500; }
+.modes button + button { border-left: 1px solid var(--line); }
+.modes button[aria-pressed="true"] { background: var(--tint); color: var(--ink); font-weight: 700; }
+#start { min-height: 54px; font-size: 17px; }
+.note { font-size: 13px; color: var(--muted); }
+.preview {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px;
+  max-height: 560px; overflow-y: auto; font-family: var(--font-read); font-size: 16px; line-height: 1.75;
+}
+.preview .para { position: relative; padding-left: 26px; }
+.preview .para + .para { margin-top: 14px; }
+.preview .para::before {
+  content: attr(data-n); position: absolute; left: 0; top: .3em;
+  font-family: var(--font-num); font-size: 11px; color: var(--muted);
+}
+.preview .s:nth-of-type(even) { background: var(--tint); }
+.empty { color: var(--muted); font-family: var(--font-ui); }
+
+/* Reader */
+.rbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--paper); border-bottom: 1px solid var(--line); }
+.rbar-in { display: flex; align-items: center; gap: 14px; padding-block: 8px; }
+#watch { font-family: var(--font-num); font-weight: 600; font-size: 30px; line-height: 1.2; font-variant-numeric: tabular-nums; }
+#pos { font-size: 14px; color: var(--muted); white-space: nowrap; }
+#pos b { font-family: var(--font-num); color: var(--ink); font-weight: 600; }
+.rtools { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.rtools .btn { min-height: 40px; padding: 4px 10px; font-size: 14px; white-space: nowrap; }
+.track { height: 4px; background: var(--line); }
+#fill { height: 100%; width: 0; background: var(--accent); transition: width .15s linear; }
+.reader {
+  max-width: 44em; margin-inline: auto; padding-top: 28px; padding-bottom: 46vh;
+  font-family: var(--font-read); font-size: var(--read-size); line-height: 1.85;
+  transition: filter .15s;
+}
+.reader .para + .para { margin-top: 1.1em; }
+.reader .s { border-radius: 3px; padding: .08em .1em; -webkit-box-decoration-break: clone; box-decoration-break: clone; transition: background-color .12s, color .12s; }
+.reader .s.now { background: var(--marker); color: var(--marker-ink); }
+.reader .s.read { background: var(--done-bg); color: var(--done-ink); }
+.is-paused .reader { filter: blur(7px); user-select: none; }
+.rfoot {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+  background: var(--paper); border-top: 1px solid var(--line);
+  padding-top: 10px; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.rfoot-in { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2.4fr); gap: 10px; max-width: 720px; margin-inline: auto; }
+.rfoot .btn { min-height: 60px; font-size: 16px; }
+@media (hover: none) { kbd { display: none; } }
+
+/* Countdown */
+#count {
+  position: fixed; inset: 0; z-index: 20; background: var(--paper);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px;
+}
+#count-n { font-family: var(--font-num); font-weight: 600; font-size: min(38vw, 220px); line-height: 1; color: var(--accent); }
+
+/* Result */
+.result { max-width: 680px; margin-inline: auto; padding-block: 28px 48px; display: flex; flex-direction: column; gap: 22px; }
+.result h1 { font-family: var(--font-read); font-weight: 600; font-size: 28px; }
+.scores { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.score { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; min-width: 0; }
+.score span { display: block; font-size: 13px; color: var(--muted); }
+.score b { display: block; font-family: var(--font-num); font-weight: 600; font-size: clamp(34px, 11vw, 56px); line-height: 1.2; font-variant-numeric: tabular-nums; }
+.score.hero { background: var(--marker); border-color: var(--marker); color: var(--marker-ink); }
+.score.hero span { color: var(--marker-ink); }
+#compare:empty { display: none; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.actions .btn { flex: 1 1 150px; }
+
+/* History */
+.hist { max-width: 860px; margin-inline: auto; padding-block: 12px 48px; display: flex; flex-direction: column; gap: 16px; }
+.filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.filters button { min-height: 36px; padding: 2px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); }
+.filters button[aria-pressed="true"] { background: var(--tint); color: var(--ink); font-weight: 700; }
+.sum { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; border-block: 1px solid var(--line); padding-block: 12px; }
+.sum span { display: block; font-size: 13px; color: var(--muted); }
+.sum b { font-family: var(--font-num); font-weight: 600; font-size: 24px; font-variant-numeric: tabular-nums; }
+.rows { display: flex; flex-direction: column; }
+.row { border-bottom: 1px solid var(--line); }
+.row summary {
+  list-style: none; cursor: pointer; padding-block: 12px;
+  display: grid; grid-template-columns: minmax(0, 1fr) 76px 76px; gap: 4px 14px; align-items: baseline;
+}
+.row summary::-webkit-details-marker { display: none; }
+.num-time { grid-column: 2; }
+.num-wpm { grid-column: 3; }
+.row-title { grid-column: 1; grid-row: 1; font-family: var(--font-read); font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-meta { grid-column: 1; grid-row: 2; font-size: 12px; color: var(--muted); }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; text-align: right; grid-row: 1 / span 2; }
+.num small { display: block; font-family: var(--font-ui); font-size: 11px; color: var(--muted); }
+.row-body { padding-bottom: 16px; display: flex; flex-direction: column; gap: 12px; }
+.row-text { font-family: var(--font-read); font-size: 15px; line-height: 1.7; }
+.row-text .para + .para { margin-top: 10px; }
+.row-body .actions .btn { flex: 0 1 auto; }
+
+@media (max-width: 800px) {
+  .compose { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  #text { height: 200px; }
+  .preview { max-height: none; }
+  .rbar-in { gap: 10px; }
+  #watch { font-size: 26px; }
+  .rfoot .btn { min-height: 64px; }
+}
+@media (max-width: 480px) {
+  .rbar-in { flex-wrap: wrap; row-gap: 4px; justify-content: space-between; }
+  .rtools { margin-left: 0; width: 100%; }
+  .rtools .btn { flex: 1; }
+  .reader { padding-top: 20px; }
+  .scores { grid-template-columns: minmax(0, 1fr); }
+  .row summary { grid-template-columns: minmax(0, 1fr) 64px 52px; gap: 4px 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+}
+</style>
+
+<div id="app">
+  <header class="wrap top" id="top">
+    <div class="brand"><mark>Pace</mark> Reader</div>
+    <nav class="nav" id="nav" aria-label="画面の切り替え">
+      <button type="button" id="nav-input" aria-current="page">読む</button>
+      <button type="button" id="nav-history">履歴</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Input -->
+    <section id="view-input" class="wrap compose">
+      <div class="col">
+        <div class="col-head">
+          <label for="text">英文を貼り付け</label>
+          <button type="button" class="btn quiet" id="clear" style="min-height:36px;padding:2px 12px">クリア</button>
+        </div>
+        <textarea id="text" spellcheck="false" autocapitalize="off" autocomplete="off" lang="en" placeholder="ここに英文を入力または貼り付けてください"></textarea>
+        <div class="counts" aria-live="polite">
+          <span><b id="c-words">0</b> 語</span>
+          <span><b id="c-sents">0</b> 文</span>
+          <span><b id="c-paras">0</b> 段落</span>
+        </div>
+        <div class="modes" role="group" aria-label="練習の種類" id="modes">
+          <button type="button" data-mode="多読">多読</button>
+          <button type="button" data-mode="速読">速読</button>
+          <button type="button" data-mode="音読">音読</button>
+        </div>
+        <button type="button" class="btn primary" id="start">スタート</button>
+        <p class="note" id="key-note">スタートの3秒後に計測が始まります。<kbd>→</kbd> か <kbd>Space</kbd> で次の文へ、<kbd>Shift</kbd>+<kbd>Space</kbd> で1文戻ります。</p>
+      </div>
+      <div class="col">
+        <div class="col-head">
+          <h2>整理後の英文</h2>
+          <span class="tag" id="pv-tag">濃淡の切り替わりが文の区切りです</span>
+        </div>
+        <div class="preview" id="preview" lang="en"></div>
+      </div>
+    </section>
+
+    <!-- Reader -->
+    <section id="view-reader" hidden>
+      <div class="rbar">
+        <div class="wrap rbar-in">
+          <div id="watch" role="timer" aria-label="経過時間">0:00.0</div>
+          <div id="pos"><b id="pos-n">1</b> / <span id="pos-t">1</span> 文</div>
+          <div class="rtools">
+            <button type="button" class="btn" id="smaller" aria-label="文字を小さく">A−</button>
+            <button type="button" class="btn" id="bigger" aria-label="文字を大きく">A+</button>
+            <button type="button" class="btn" id="pause">停止</button>
+            <button type="button" class="btn" id="quit">やめる</button>
+          </div>
+        </div>
+        <div class="track"><div id="fill"></div></div>
+      </div>
+      <div class="wrap"><div class="reader" id="reader" lang="en"></div></div>
+      <div class="rfoot">
+        <div class="rfoot-in">
+          <button type="button" class="btn" id="prev">戻る <kbd>Shift+Space</kbd></button>
+          <button type="button" class="btn primary" id="next">次の文へ <kbd>→ / Space</kbd></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Result -->
+    <section id="view-result" class="wrap" hidden>
+      <div class="result">
+        <h1>読み終わりました</h1>
+        <div class="scores">
+          <div class="score hero"><span>WPM(語/分)</span><b id="r-wpm">0</b></div>
+          <div class="score"><span>かかった時間</span><b id="r-time">0:00.0</b></div>
+        </div>
+        <div class="counts">
+          <span id="r-mode"></span>
+          <span><b id="r-words">0</b> 語</span>
+          <span><b id="r-sents">0</b> 文</span>
+          <span><b id="r-paras">0</b> 段落</span>
+        </div>
+        <p class="note" id="compare"></p>
+        <p class="note" id="r-saved"></p>
+        <div class="actions">
+          <button type="button" class="btn primary" id="again">もう一度読む</button>
+          <button type="button" class="btn" id="another">別の英文を読む</button>
+          <button type="button" class="btn" id="to-history">履歴を見る</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- History (PC only) -->
+    <section id="view-history" class="wrap" hidden>
+      <div class="hist">
+        <div class="filters" id="filters" role="group" aria-label="練習の種類で絞り込み"></div>
+        <div class="sum">
+          <div><span>読んだ回数</span><b id="h-count">0</b></div>
+          <div><span>累計語数</span><b id="h-words">0</b></div>
+          <div><span>平均WPM</span><b id="h-wpm">–</b></div>
+        </div>
+        <div class="rows" id="rows"></div>
+        <p class="empty" id="h-empty" hidden>まだ履歴はありません。英文を最後まで読むと、ここに自動で保存されます。</p>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="count" hidden>
+  <div id="count-n" aria-live="assertive">3</div>
+  <button type="button" class="btn quiet" id="count-cancel">キャンセル <kbd>Esc</kbd></button>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---------- Text parsing ---------- */
+  var TITLES = new Set(['Mr','Mrs','Ms','Dr','Prof','St','Mt','Ft','Gen','Col','Capt','Lt','Sgt','Rev','Hon','Gov','Sen','Rep','vs','e.g','i.e','cf','E.g','I.e']);
+  var BEFORE_NUMBER = new Set(['No','Nos','no','Fig','Figs','fig','Vol','vol','pp','p','Ch','ch','Sec','Jan','Feb','Mar','Apr','Jun','Jul','Aug','Sep','Sept','Oct','Nov','Dec']);
+  var OPENERS = new Set(['The','A','An','He','She','It','They','We','You','I','In','On','At','But','And','So','This','That','These','Those','Then','There','When','If','As','However','Today']);
+
+  function splitSentences(p) {
+    var out = [], start = 0, re = /[.!?…]+["'”’)\]]*(?=\s|$)/g, m;
+    while ((m = re.exec(p))) {
+      var end = m.index + m[0].length;
+      if (end >= p.length) break;
+      var after = p.slice(end).match(/^\s+["'“‘(\[]*(\S+)/);
+      var nextWord = after ? after[1] : '';
+      var nextChar = nextWord.charAt(0);
+      if (/[a-z]/.test(nextChar)) continue;
+      if (m[0] === '.') {
+        var tm = p.slice(0, m.index).match(/[^\s("'“‘\[]+$/);
+        var tok = tm ? tm[0] : '';
+        if (TITLES.has(tok)) continue;
+        if (BEFORE_NUMBER.has(tok) && /\d/.test(nextChar)) continue;
+        if (/^[A-Z]$/.test(tok) && tok !== 'I') continue;
+        if (/^(?:[A-Za-z]{1,2}\.)+[A-Za-z]{1,2}$/.test(tok) && !OPENERS.has(nextWord.replace(/\W+$/, ''))) continue;
+      }
+      out.push(p.slice(start, end).trim());
+      start = end;
+    }
+    var rest = p.slice(start).trim();
+    if (rest) out.push(rest);
+    return out;
+  }
+
+  function countWords(s) {
+    return s.split(/\s+/).filter(function (w) { return /[A-Za-z0-9À-ɏ]/.test(w); }).length;
+  }
+
+  function joinLine(cur, line) {
+    if (!cur) return line;
+    if (/[a-z]-$/.test(cur) && /^[a-z]/.test(line)) return cur.slice(0, -1) + line;
+    return cur + ' ' + line;
+  }
+
+  var ENDS = /[.!?…:]["'”’)\]]*$/;
+
+  // Lines inside one block: either real paragraphs, or a hard-wrapped paragraph (PDF, email).
+  function blockToParagraphs(lines) {
+    if (lines.length === 1) return lines;
+    var ending = lines.filter(function (l) { return ENDS.test(l); }).length;
+    if (ending / lines.length >= 0.6) {
+      var paras = [], acc = '';
+      lines.forEach(function (l) {
+        acc = joinLine(acc, l);
+        if (ENDS.test(l) || l.length < 60) { paras.push(acc); acc = ''; }
+      });
+      if (acc) paras.push(acc);
+      return paras;
+    }
+    var longest = Math.max.apply(null, lines.map(function (l) { return l.length; }));
+    var res = [], cur = '';
+    lines.forEach(function (l) {
+      cur = joinLine(cur, l);
+      if (ENDS.test(l) && l.length < longest * 0.75) { res.push(cur); cur = ''; }
+    });
+    if (cur) res.push(cur);
+    return res;
+  }
+
+  // Break an over-long paragraph at sentence boundaries, about 80 words per paragraph.
+  function chunk(sentences) {
+    var total = sentences.reduce(function (n, s) { return n + countWords(s); }, 0);
+    if (total <= 120 || sentences.length < 3) return [sentences];
+    var groups = [], cur = [], n = 0;
+    sentences.forEach(function (s) {
+      cur.push(s); n += countWords(s);
+      if (n >= 80) { groups.push(cur); cur = []; n = 0; }
+    });
+    if (cur.length) {
+      if (n < 30 && groups.length) groups[groups.length - 1] = groups[groups.length - 1].concat(cur);
+      else groups.push(cur);
+    }
+    return groups;
+  }
+
+  function parse(raw) {
+    var text = raw.replace(/\r\n?/g, '\n').replace(/[ 　\t]/g, ' ').replace(/[​﻿]/g, '');
+    var blocks = [], cur = [];
+    text.split('\n').forEach(function (line) {
+      var l = line.replace(/ {2,}/g, ' ').trim();
+      if (l) cur.push(l);
+      else if (cur.length) { blocks.push(cur); cur = []; }
+    });
+    if (cur.length) blocks.push(cur);
+
+    var paragraphs = [], autoSplit = false;
+    blocks.forEach(function (b) {
+      blockToParagraphs(b).forEach(function (p) {
+        var groups = chunk(splitSentences(p));
+        if (groups.length > 1) autoSplit = true;
+        groups.forEach(function (g) { paragraphs.push(g); });
+      });
+    });
+    var flat = paragraphs.reduce(function (a, p) { return a.concat(p); }, []);
+    return {
+      paragraphs: paragraphs,
+      sentences: flat,
+      words: flat.reduce(function (n, s) { return n + countWords(s); }, 0),
+      autoSplit: autoSplit
+    };
+  }
+
+  /* ---------- Storage (this browser only) ---------- */
+  function read(key, fallback) {
+    try {
+      var v = localStorage.getItem(key);
+      return v === null ? fallback : JSON.parse(v);
+    } catch (e) { return fallback; }
+  }
+  function write(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); return true; }
+    catch (e) { return false; }
+  }
+
+  // History is a PC feature: phones and tablets neither save nor show it.
+  var historyOn = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
+  /* ---------- Helpers ---------- */
+  function $(id) { return document.getElementById(id); }
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+  function fmt(ms) {
+    var t = Math.floor(ms / 100), m = Math.floor(t / 600), s = Math.floor((t % 600) / 10);
+    return m + ':' + (s < 10 ? '0' : '') + s + '.' + (t % 10);
+  }
+  function wpmOf(words, ms) { return Math.round(words / (Math.max(ms, 100) / 60000)); }
+  function num(n) { return n.toLocaleString('en-US'); }
+  function reducedMotion() { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
+
+  // Two-step button, because the viewer has no confirm() dialog.
+  function armed(btn, askLabel, action) {
+    var label = btn.textContent, timer = null;
+    btn.addEventListener('click', function () {
+      if (timer) {
+        clearTimeout(timer); timer = null;
+        btn.textContent = label; btn.classList.remove('armed');
+        action();
+        return;
+      }
+      btn.textContent = askLabel; btn.classList.add('armed');
+      timer = setTimeout(function () {
+        timer = null; btn.textContent = label; btn.classList.remove('armed');
+      }, 3000);
+    });
+  }
+
+  /* ---------- State ---------- */
+  var SAMPLE = [
+    "The Lighthouse Keeper's Notebook",
+    '',
+    'Every morning at six, Dr. Hana Mori climbed the ninety-two steps of the old lighthouse. She was not a sailor, and she had never planned to live by the sea. She had come to the island for one summer to study birds. That was eleven years ago.',
+    '',
+    'Her notebook began as a list of wings and weather. Over time, it became something else. She wrote down the colour of the water, the names of passing ships, and the small things visitors told her. "You notice more when you read the same sea every day," she once said.',
+    '',
+    'Last spring, a young student asked how she had learned so much. Hana smiled and opened the first page. The handwriting was messy, and half of the words were crossed out. "I did not learn it all at once," she said. "I just kept going, one line at a time."'
+  ].join('\n');
+
+  var doc = null;          // parsed text in the current session
+  var sourceText = '';     // raw text of the current session
+  var spans = [];
+  var idx = 0;
+  var running = false, paused = false, counting = false;
+  var acc = 0, since = 0, tick = null, countTimer = null, wake = null;
+  var mode = read('pr.mode', '多読');
+  var fontSize = read('pr.font', window.innerWidth < 600 ? 19 : 21);
+  var filter = 'すべて';
+
+  /* ---------- Views ---------- */
+  var VIEWS = ['input', 'reader', 'result', 'history'];
+  function show(name) {
+    VIEWS.forEach(function (v) { $('view-' + v).hidden = v !== name; });
+    $('top').hidden = name === 'reader';
+    $('nav-input').setAttribute('aria-current', name === 'history' ? 'false' : 'page');
+    $('nav-history').setAttribute('aria-current', name === 'history' ? 'page' : 'false');
+    window.scrollTo(0, 0);
+  }
+
+  function renderParas(box, parsed, keep) {
+    box.textContent = '';
+    parsed.paragraphs.forEach(function (sentences, i) {
+      var p = el('p', 'para');
+      p.dataset.n = '¶' + (i + 1);
+      sentences.forEach(function (s, j) {
+        if (j) p.appendChild(document.createTextNode(' '));
+        var span = el('span', 's', s);
+        p.appendChild(span);
+        if (keep) keep.push(span);
+      });
+      box.appendChild(p);
+    });
+  }
+
+  /* ---------- Input ---------- */
+  var draftTimer = null;
+  function refresh() {
+    var parsed = parse($('text').value);
+    $('c-words').textContent = num(parsed.words);
+    $('c-sents').textContent = parsed.sentences.length;
+    $('c-paras').textContent = parsed.paragraphs.length;
+    $('start').disabled = parsed.words === 0;
+    $('pv-tag').textContent = parsed.autoSplit ? '長い段落を読みやすい長さに分けました' : '濃淡の切り替わりが文の区切りです';
+    var pv = $('preview');
+    if (parsed.words === 0) {
+      pv.textContent = '';
+      pv.appendChild(el('p', 'empty', '英文を入力すると、ここに段落ごとに整理して表示します。'));
+    } else {
+      renderParas(pv, parsed);
+    }
+  }
+
+  function setMode(m) {
+    mode = m;
+    write('pr.mode', m);
+    Array.prototype.forEach.call($('modes').children, function (b) {
+      b.setAttribute('aria-pressed', String(b.dataset.mode === m));
+    });
+  }
+
+  /* ---------- Reading session ---------- */
+  function elapsed() { return acc + (running && !paused ? performance.now() - since : 0); }
+
+  function begin(raw) {
+    var parsed = parse(raw);
+    if (parsed.words === 0) return;
+    doc = parsed; sourceText = raw; spans = []; idx = 0; acc = 0; paused = false;
+    renderParas($('reader'), doc, spans);
+    $('pos-t').textContent = spans.length;
+    $('watch').textContent = '0:00.0';
+    $('fill').style.width = '0';
+    $('view-reader').classList.remove('is-paused');
+    $('pause').textContent = '停止';
+    $('next').disabled = false;
+    mark();
+    show('reader');
+    countdown();
+  }
+
+  function countdown() {
+    var n = 3, box = $('count-n');
+    counting = true;
+    $('count').hidden = false;
+    if (document.activeElement) document.activeElement.blur();
+    var paint = function () {
+      box.textContent = n;
+      if (!reducedMotion() && box.animate) {
+        box.animate([{ transform: 'scale(1.25)', opacity: .4 }, { transform: 'scale(1)', opacity: 1 }], { duration: 260, easing: 'ease-out' });
+      }
+    };
+    paint();
+    countTimer = setInterval(function () {
+      n -= 1;
+      if (n > 0) { paint(); return; }
+      clearInterval(countTimer);
+      counting = false;
+      $('count').hidden = true;
+      go();
+    }, 1000);
+  }
+
+  function cancelCountdown() {
+    clearInterval(countTimer);
+    counting = false;
+    $('count').hidden = true;
+    show('input');
+  }
+
+  function go() {
+    running = true;
+    since = performance.now();
+    tick = setInterval(function () { $('watch').textContent = fmt(elapsed()); }, 50);
+    keepAwake();
+    window.focus();
+  }
+
+  function keepAwake() {
+    if (navigator.wakeLock && navigator.wakeLock.request) {
+      navigator.wakeLock.request('screen').then(function (w) { wake = w; }).catch(function () {});
+    }
+  }
+  function letSleep() {
+    if (wake) { wake.release().catch(function () {}); wake = null; }
+  }
+
+  function stopClock() {
+    acc = elapsed();
+    running = false;
+    clearInterval(tick);
+    letSleep();
+  }
+
+  function mark() {
+    spans.forEach(function (s, i) {
+      s.classList.toggle('read', i < idx);
+      s.classList.toggle('now', i === idx);
+    });
+    $('pos-n').textContent = Math.min(idx + 1, spans.length);
+    $('fill').style.width = (idx / spans.length * 100) + '%';
+    $('prev').disabled = idx === 0;
+  }
+
+  function follow() {
+    var s = spans[idx];
+    if (!s) return;
+    var r = s.getBoundingClientRect(), h = window.innerHeight;
+    if (r.top < 90 || r.bottom > h * 0.62) {
+      window.scrollBy({ top: r.top - h * 0.28, behavior: reducedMotion() ? 'auto' : 'smooth' });
+    }
+  }
+
+  function next() {
+    if (!running || paused) return;
+    idx += 1;
+    if (idx >= spans.length) { finish(); return; }
+    mark(); follow();
+  }
+
+  function back() {
+    if (!running || paused || idx === 0) return;
+    idx -= 1;
+    mark(); follow();
+  }
+
+  function togglePause() {
+    if (!running) return;
+    if (paused) {
+      paused = false; since = performance.now();
+      $('pause').textContent = '停止';
+    } else {
+      acc = elapsed(); paused = true;
+      $('pause').textContent = '再開';
+      $('watch').textContent = fmt(acc);
+    }
+    $('view-reader').classList.toggle('is-paused', paused);
+    $('next').disabled = paused;
+    $('prev').disabled = paused || idx === 0;
+  }
+
+  function quit() {
+    stopClock();
+    show('input');
+  }
+
+  function finish() {
+    stopClock();
+    var ms = acc, wpm = wpmOf(doc.words, ms);
+    $('r-wpm').textContent = num(wpm);
+    $('r-time').textContent = fmt(ms);
+    $('r-mode').textContent = mode;
+    $('r-words').textContent = num(doc.words);
+    $('r-sents').textContent = doc.sentences.length;
+    $('r-paras').textContent = doc.paragraphs.length;
+
+    var compare = '', saved = '';
+    if (historyOn) {
+      var list = read('pr.history', []);
+      var last = list.find(function (h) { return h.text === sourceText; });
+      if (last) {
+        var d = wpm - last.wpm;
+        compare = '同じ英文の前回は ' + last.wpm + ' WPM でした(' + (d >= 0 ? '+' : '−') + Math.abs(d) + ' WPM)。';
+      }
+      list.unshift({
+        id: Date.now().toString(36), at: new Date().toISOString(), text: sourceText,
+        title: doc.sentences[0].slice(0, 80), mode: mode, ms: Math.round(ms), wpm: wpm,
+        words: doc.words, sentences: doc.sentences.length, paragraphs: doc.paragraphs.length
+      });
+      saved = write('pr.history', list)
+        ? '履歴に保存しました。'
+        : '履歴を保存できませんでした。ブラウザの保存領域が一杯か、保存が禁止されています。履歴の古い記録を削除してください。';
+    }
+    $('compare').textContent = compare;
+    $('r-saved').textContent = saved;
+    show('result');
+  }
+
+  /* ---------- History ---------- */
+  function renderHistory() {
+    var all = read('pr.history', []);
+    var box = $('filters');
+    box.textContent = '';
+    ['すべて', '多読', '速読', '音読'].forEach(function (f) {
+      var b = el('button', '', f);
+      b.type = 'button';
+      b.setAttribute('aria-pressed', String(f === filter));
+      b.addEventListener('click', function () { filter = f; renderHistory(); });
+      box.appendChild(b);
+    });
+
+    var list = all.filter(function (h) { return filter === 'すべて' || h.mode === filter; });
+    var words = list.reduce(function (n, h) { return n + h.words; }, 0);
+    var ms = list.reduce(function (n, h) { return n + h.ms; }, 0);
+    $('h-count').textContent = list.length;
+    $('h-words').textContent = num(words);
+    $('h-wpm').textContent = list.length ? wpmOf(words, ms) : '–';
+    $('h-empty').hidden = list.length > 0;
+    $('h-empty').textContent = all.length
+      ? filter + 'の履歴はまだありません。'
+      : 'まだ履歴はありません。英文を最後まで読むと、ここに自動で保存されます。';
+
+    var rows = $('rows');
+    rows.textContent = '';
+    list.forEach(function (h) {
+      var row = el('details', 'row');
+      var sum = el('summary');
+      var title = el('div', 'row-title', h.title);
+      title.lang = 'en';
+      var date = new Date(h.at).toLocaleString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+      var meta = el('div', 'row-meta', date + ' ・ ' + h.mode + ' ・ ' + num(h.words) + '語');
+      var t = el('div', 'num num-time', fmt(h.ms));
+      t.appendChild(el('small', '', '時間'));
+      var w = el('div', 'num num-wpm', String(h.wpm));
+      w.appendChild(el('small', '', 'WPM'));
+      sum.append(title, t, w, meta);
+      row.appendChild(sum);
+
+      var body = el('div', 'row-body');
+      var text = el('div', 'row-text');
+      text.lang = 'en';
+      renderParas(text, parse(h.text));
+      var acts = el('div', 'actions');
+      var again = el('button', 'btn primary', 'もう一度読む');
+      again.type = 'button';
+      again.addEventListener('click', function () {
+        setMode(h.mode);
+        $('text').value = h.text;
+        write('pr.draft', h.text);
+        refresh();
+        begin(h.text);
+      });
+      var del = el('button', 'btn danger', '削除');
+      del.type = 'button';
+      armed(del, '本当に削除', function () {
+        write('pr.history', read('pr.history', []).filter(function (x) { return x.id !== h.id; }));
+        renderHistory();
+      });
+      acts.append(again, del);
+      body.append(text, acts);
+      row.appendChild(body);
+      rows.appendChild(row);
+    });
+  }
+
+  /* ---------- Events ---------- */
+  $('text').addEventListener('input', function () {
+    refresh();
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(function () { write('pr.draft', $('text').value); }, 400);
+  });
+  $('clear').addEventListener('click', function () {
+    $('text').value = '';
+    write('pr.draft', '');
+    refresh();
+    $('text').focus();
+  });
+  Array.prototype.forEach.call($('modes').children, function (b) {
+    b.addEventListener('click', function () { setMode(b.dataset.mode); });
+  });
+  $('start').addEventListener('click', function () { begin($('text').value); });
+  $('count-cancel').addEventListener('click', cancelCountdown);
+  $('nav-input').addEventListener('click', function () { show('input'); });
+  $('nav-history').addEventListener('click', function () { renderHistory(); show('history'); });
+  $('again').addEventListener('click', function () { begin(sourceText); });
+  $('another').addEventListener('click', function () { show('input'); $('text').select(); });
+  $('to-history').addEventListener('click', function () { renderHistory(); show('history'); });
+
+  function clickThenBlur(id, fn) {
+    $(id).addEventListener('click', function () { fn(); $(id).blur(); });
+  }
+  clickThenBlur('next', next);
+  clickThenBlur('prev', back);
+  clickThenBlur('pause', togglePause);
+  armed($('quit'), '本当にやめる', quit);
+
+  function applyFont() {
+    document.documentElement.style.setProperty('--read-size', fontSize + 'px');
+    write('pr.font', fontSize);
+    $('smaller').disabled = fontSize <= 15;
+    $('bigger').disabled = fontSize >= 33;
+  }
+  clickThenBlur('smaller', function () { fontSize = Math.max(15, fontSize - 2); applyFont(); });
+  clickThenBlur('bigger', function () { fontSize = Math.min(33, fontSize + 2); applyFont(); });
+
+  document.addEventListener('keydown', function (e) {
+    if (counting) {
+      if (e.key === 'Escape') cancelCountdown();
+      else if (e.code === 'Space') e.preventDefault();
+      return;
+    }
+    if (!running) return;
+    if (e.code === 'Space') {
+      e.preventDefault();
+      if (e.repeat) return;
+      if (e.shiftKey) back(); else next();
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      if (!e.repeat) next();
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      if (!e.repeat) back();
+    } else if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+      if (!e.repeat) togglePause();
+    }
+  });
+  document.addEventListener('keyup', function (e) {
+    if (running && e.code === 'Space') e.preventDefault();
+  });
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && running) keepAwake();
+  });
+
+  /* ---------- Boot ---------- */
+  if (!historyOn) {
+    $('nav').hidden = true;
+    $('to-history').hidden = true;
+    $('key-note').textContent = 'スタートの3秒後に計測が始まります。画面下のボタンで1文ずつ進みます。';
+  }
+  var draft = read('pr.draft', null);
+  $('text').value = draft === null ? SAMPLE : draft;
+  setMode(mode);
+  applyFont();
+  refresh();
+})();
+</script>
