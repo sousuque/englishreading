@@ -4,7 +4,7 @@
 <title>Pace Reader</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Literata:opsz,wght@7..72,400;7..72,600&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Atkinson+Hyperlegible:wght@400;700&family=Literata:opsz,wght@7..72,400;7..72,600&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
 <style>
 /* Layout: one reading column under a stopwatch bar. A yellow marker travels through the text and leaves teal behind it. */
 :root {
@@ -12,7 +12,9 @@
   --accent: #0e6573; --on-accent: #ffffff; --tint: #e3edf0;
   --marker: #ffe45c; --marker-ink: #17232e; --done-ink: #0e6573; --done-bg: #d9eef0;
   --danger: #b3261e;
-  --font-read: "Literata", Georgia, "Times New Roman", serif;
+  --font-serif: "Literata", Georgia, "Times New Roman", serif;
+  --font-sans: "Atkinson Hyperlegible", "Segoe UI", Roboto, Arial, sans-serif;
+  --font-read: var(--font-serif);
   --font-ui: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", Meiryo, sans-serif;
   --font-num: "IBM Plex Mono", ui-monospace, Consolas, monospace;
   --read-size: 20px;
@@ -31,6 +33,8 @@
   --marker: #f2d544; --marker-ink: #17232e; --done-ink: #86d6df; --done-bg: #17353c;
   --danger: #ff8f86; color-scheme: dark;
 }
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-font="sans"] { --font-read: var(--font-sans); }
 *, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
@@ -72,13 +76,42 @@ kbd {
 
 /* App header */
 .top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 14px; }
-.brand { font-family: var(--font-read); font-weight: 600; font-size: 22px; letter-spacing: -.01em; }
+.brand { font-family: var(--font-serif); font-weight: 600; font-size: 22px; letter-spacing: -.01em; }
 .brand mark { background: var(--marker); color: var(--marker-ink); padding: 0 .18em; }
 .nav { display: flex; gap: 4px; }
 .nav button {
   min-height: 40px; padding: 4px 14px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-weight: 500;
 }
 .nav button[aria-current="page"] { background: var(--tint); color: var(--ink); font-weight: 700; }
+
+/* Menu */
+.top-right { display: flex; align-items: center; gap: 8px; }
+.burger {
+  width: 44px; height: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 8px; background: transparent;
+}
+.burger:hover { background: var(--tint); }
+.burger svg { display: block; }
+#scrim { position: fixed; inset: 0; z-index: 29; background: rgba(8, 16, 22, .5); }
+#menu {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 30; width: min(360px, 100%);
+  display: flex; flex-direction: column; gap: 22px; overflow-y: auto; overscroll-behavior: contain;
+  background: var(--surface); border-left: 1px solid var(--line);
+  padding-top: calc(10px + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  padding-left: 18px;
+  padding-right: max(18px, env(safe-area-inset-right, 0px));
+}
+.menu-head { display: flex; align-items: center; justify-content: space-between; }
+.menu-head h2 { font-size: 16px; font-weight: 700; }
+.menu-sec { display: flex; flex-direction: column; gap: 8px; }
+.menu-sec h3 { margin: 0; font-size: 14px; font-weight: 700; }
+.avg { width: 100%; border-collapse: collapse; }
+.avg th, .avg td { padding: 8px 0; border-bottom: 1px solid var(--line); text-align: right; }
+.avg thead th { padding-top: 0; font-size: 12px; font-weight: 500; color: var(--muted); }
+.avg tbody th { text-align: left; font-weight: 500; }
+.avg td b { font-family: var(--font-num); font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.avg td small { display: block; font-size: 11px; color: var(--muted); }
 
 /* Input view */
 .compose { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; padding-bottom: 40px; align-items: start; }
@@ -141,7 +174,11 @@ kbd {
 }
 .rfoot-in { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2.4fr); gap: 10px; max-width: 720px; margin-inline: auto; }
 .rfoot .btn { min-height: 60px; font-size: 16px; }
-@media (hover: none) { kbd { display: none; } }
+@media (hover: none) {
+  kbd { display: none; }
+  .rfoot-in { grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr); }
+  #prev { order: 2; }
+}
 
 /* Countdown */
 #count {
@@ -189,6 +226,40 @@ kbd {
 .row-text .para + .para { margin-top: 10px; }
 .row-body .actions .btn { flex: 0 1 auto; }
 
+/* Word picker and word list */
+.picker { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--line); padding-top: 18px; }
+.picker-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.picker h2 { font-size: 16px; font-weight: 700; }
+.picker-opts { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.picker-opts label { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; font-size: 13px; color: var(--muted); cursor: pointer; }
+.picker .btn { min-height: 36px; padding: 2px 12px; font-size: 14px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { position: relative; }
+.chip input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+.chip span {
+  display: inline-flex; align-items: center; gap: 4px; min-height: 40px; padding: 4px 12px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--surface);
+  font-family: var(--font-read); font-size: 16px;
+}
+.chip input:checked + span { background: var(--marker); border-color: var(--marker); color: var(--marker-ink); font-weight: 600; }
+.chip input:checked + span::before { content: "✓"; }
+.chip input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chip:hover span { border-color: var(--accent); }
+.vocab-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.vocab-head h1 { font-size: 20px; font-weight: 700; }
+.vocab-head h1 b { font-family: var(--font-num); font-weight: 600; }
+.vocab-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.table-scroll { overflow-x: auto; }
+.vocab { width: 100%; border-collapse: collapse; }
+.vocab th { text-align: left; font-size: 12px; font-weight: 500; color: var(--muted); padding: 6px 12px 6px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.vocab td { padding: 10px 12px 10px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.vocab .c-word { font-family: var(--font-read); font-size: 17px; font-weight: 600; white-space: nowrap; }
+.vocab .c-sent { font-family: var(--font-read); font-size: 15px; line-height: 1.6; min-width: 200px; }
+.vocab .c-sent mark { background: var(--marker); color: var(--marker-ink); padding: 0 .1em; }
+.vocab .c-date { font-family: var(--font-num); font-size: 12px; color: var(--muted); white-space: nowrap; }
+.vocab .c-del { padding-right: 0; text-align: right; }
+.vocab .c-del .btn { min-height: 36px; padding: 2px 10px; font-size: 13px; white-space: nowrap; }
+
 @media (max-width: 800px) {
   .compose { grid-template-columns: minmax(0, 1fr); gap: 20px; }
   #text { height: 200px; }
@@ -203,6 +274,8 @@ kbd {
   .rtools .btn { flex: 1; }
   .reader { padding-top: 20px; }
   .scores { grid-template-columns: minmax(0, 1fr); }
+  .vocab .c-date { display: none; }
+  .vocab .c-sent { min-width: 0; }
   .row summary { grid-template-columns: minmax(0, 1fr) 64px 52px; gap: 4px 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -213,10 +286,16 @@ kbd {
 <div id="app">
   <header class="wrap top" id="top">
     <div class="brand"><mark>Pace</mark> Reader</div>
-    <nav class="nav" id="nav" aria-label="画面の切り替え">
-      <button type="button" id="nav-input" aria-current="page">読む</button>
-      <button type="button" id="nav-history">履歴</button>
-    </nav>
+    <div class="top-right">
+      <nav class="nav" id="nav" aria-label="画面の切り替え">
+        <button type="button" id="nav-input" aria-current="page">読む</button>
+        <button type="button" id="nav-history">履歴</button>
+        <button type="button" id="nav-words">単語帳</button>
+      </nav>
+      <button type="button" class="burger" id="burger" aria-label="メニューを開く" aria-expanded="false" aria-controls="menu">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 5.5h16M3 11h16M3 16.5h16"/></svg>
+      </button>
+    </div>
   </header>
 
   <main>
@@ -295,6 +374,28 @@ kbd {
           <button type="button" class="btn" id="another">別の英文を読む</button>
           <button type="button" class="btn" id="to-history">履歴を見る</button>
         </div>
+        <div id="r-picker"></div>
+      </div>
+    </section>
+
+    <!-- Word list -->
+    <section id="view-words" class="wrap" hidden>
+      <div class="hist">
+        <div class="vocab-head">
+          <h1>単語帳 <b id="v-count">0</b> 語</h1>
+          <div class="vocab-actions">
+            <button type="button" class="btn primary" id="v-csv">CSVで保存</button>
+            <button type="button" class="btn danger" id="v-clear">すべて削除</button>
+          </div>
+        </div>
+        <p class="note" id="v-status" aria-live="polite"></p>
+        <div class="table-scroll" id="v-table">
+          <table class="vocab">
+            <thead><tr><th scope="col">単語</th><th scope="col">出てきた文</th><th scope="col" class="c-date">追加日</th><th scope="col"><span hidden>操作</span></th></tr></thead>
+            <tbody id="v-rows"></tbody>
+          </table>
+        </div>
+        <p class="empty" id="v-empty" hidden>まだ単語はありません。英文を読み終えた後の画面で、わからなかった単語にチェックを入れると、ここに追加されます。</p>
       </div>
     </section>
 
@@ -318,6 +419,39 @@ kbd {
   <div id="count-n" aria-live="assertive">3</div>
   <button type="button" class="btn quiet" id="count-cancel">キャンセル <kbd>Esc</kbd></button>
 </div>
+
+<div id="scrim" hidden></div>
+<aside id="menu" role="dialog" aria-modal="true" aria-label="メニュー" hidden>
+  <div class="menu-head">
+    <h2>メニュー</h2>
+    <button type="button" class="btn quiet" id="menu-close" style="min-height:40px;padding:2px 12px">閉じる</button>
+  </div>
+  <section class="menu-sec">
+    <h3>平均WPM</h3>
+    <div id="m-stats">
+      <table class="avg">
+        <thead><tr><th scope="col"><span hidden>種類</span></th><th scope="col">全期間</th><th scope="col">直近5日間</th></tr></thead>
+        <tbody id="m-rows"></tbody>
+      </table>
+    </div>
+    <p class="note" id="m-note">直近5日間は今日を含みます。平均は合計語数を合計時間で割った値です。</p>
+  </section>
+  <section class="menu-sec">
+    <h3>英文のフォント</h3>
+    <div class="modes" role="group" aria-label="英文のフォント" id="m-font">
+      <button type="button" data-v="serif">セリフ体</button>
+      <button type="button" data-v="sans">サンセリフ体</button>
+    </div>
+  </section>
+  <section class="menu-sec">
+    <h3>画面の色</h3>
+    <div class="modes" role="group" aria-label="画面の色" id="m-theme">
+      <button type="button" data-v="light">ライト</button>
+      <button type="button" data-v="dark">ダーク</button>
+      <button type="button" data-v="auto">自動</button>
+    </div>
+  </section>
+</aside>
 
 <script>
 (function () {
@@ -501,11 +635,12 @@ kbd {
   var filter = 'すべて';
 
   /* ---------- Views ---------- */
-  var VIEWS = ['input', 'reader', 'result', 'history'];
+  var VIEWS = ['input', 'reader', 'result', 'history', 'words'];
   function show(name) {
     VIEWS.forEach(function (v) { $('view-' + v).hidden = v !== name; });
     $('top').hidden = name === 'reader';
-    $('nav-input').setAttribute('aria-current', name === 'history' ? 'false' : 'page');
+    $('nav-input').setAttribute('aria-current', name === 'history' || name === 'words' ? 'false' : 'page');
+    $('nav-words').setAttribute('aria-current', name === 'words' ? 'page' : 'false');
     $('nav-history').setAttribute('aria-current', name === 'history' ? 'page' : 'false');
     window.scrollTo(0, 0);
   }
@@ -704,6 +839,8 @@ kbd {
     }
     $('compare').textContent = compare;
     $('r-saved').textContent = saved;
+    $('r-picker').textContent = '';
+    $('r-picker').appendChild(wordPicker(sourceText));
     show('result');
   }
 
@@ -770,11 +907,275 @@ kbd {
       acts.append(again, del);
       body.append(text, acts);
       row.appendChild(body);
+      row.addEventListener('toggle', function () {
+        if (row.open && !body.querySelector('.picker')) body.appendChild(wordPicker(h.text));
+      });
       rows.appendChild(row);
     });
   }
 
+  /* ---------- Words ---------- */
+  var BASIC_WORDS = new Set(('a an the and or but nor so yet for of to in on at by from with as about into over under up down out off ' +
+    'again after before between through during without within against along around across behind beyond near than then too very just also only ' +
+    "i you he she it we they me him her us them my your his its our their mine yours hers ours theirs myself yourself himself herself itself " +
+    'this that these those is am are was were be been being have has had do does did will would can could shall should may might must ' +
+    "not no yes who whom whose which what when where why how there here if because while though although all any both each every some " +
+    "more most much many few one two three don't doesn't didn't isn't aren't wasn't weren't can't won't i'm i've i'll i'd it's that's").split(' '));
+
+  // Unique words in reading order. Inflected forms stay as written; "Keeper's" becomes "keeper".
+  function extractWords(text) {
+    var found = new Map();
+    parse(text).sentences.forEach(function (sentence) {
+      var tokens = sentence.match(/[A-Za-z\u00c0-\u024f]+(?:['’\-][A-Za-z\u00c0-\u024f]+)*/g) || [];
+      tokens.forEach(function (raw, i) {
+        var norm = raw.replace(/’/g, "'").replace(/'s$/i, '');
+        var key = norm.toLowerCase();
+        if (key.length < 2 && key !== 'i') return;
+        var e = found.get(key);
+        if (!e) { e = { key: key, form: norm, sentence: sentence, lower: false, proper: false }; found.set(key, e); }
+        var capital = /^[A-Z]/.test(norm);
+        if (!capital) e.lower = true;
+        else if (i > 0) { e.proper = true; e.form = norm; }
+      });
+    });
+    return Array.from(found.values()).map(function (e) {
+      return { key: e.key, word: !e.lower && e.proper ? e.form : e.key, sentence: e.sentence, basic: BASIC_WORDS.has(e.key) };
+    });
+  }
+
+  function setWord(entry, on) {
+    var list = read('pr.vocab', []).filter(function (v) { return v.key !== entry.key; });
+    if (on) list.unshift({ key: entry.key, word: entry.word, sentence: entry.sentence, at: new Date().toISOString() });
+    return write('pr.vocab', list);
+  }
+
+  function wordPicker(text) {
+    var words = extractWords(text);
+    var box = el('div', 'picker');
+    var head = el('div', 'picker-head');
+    var open = el('button', 'btn', '');
+    open.type = 'button';
+    open.addEventListener('click', function () { renderWords(); show('words'); });
+    head.append(el('h2', '', 'わからなかった単語にチェック'), open);
+
+    var opts = el('div', 'picker-opts');
+    var label = el('label');
+    var basic = el('input');
+    basic.type = 'checkbox';
+    basic.checked = read('pr.basic', false);
+    var hint = el('span', '', '');
+    label.append(basic, document.createTextNode('基本語(the, is など)も表示'));
+    opts.append(label, hint);
+    hint.className = 'note';
+
+    var chips = el('div', 'chips');
+    chips.lang = 'en';
+
+    function updateCount() {
+      open.textContent = '単語帳を見る(' + read('pr.vocab', []).length + '語)';
+    }
+    function paint() {
+      var saved = new Set(read('pr.vocab', []).map(function (v) { return v.key; }));
+      var shown = words.filter(function (w) { return basic.checked || !w.basic || saved.has(w.key); });
+      hint.textContent = shown.length + '語';
+      chips.textContent = '';
+      shown.forEach(function (w) {
+        var chip = el('label', 'chip');
+        var input = el('input');
+        input.type = 'checkbox';
+        input.checked = saved.has(w.key);
+        input.addEventListener('change', function () {
+          if (!setWord(w, input.checked)) {
+            input.checked = !input.checked;
+            hint.textContent = '保存できませんでした。ブラウザの保存領域を確認してください。';
+          }
+          updateCount();
+        });
+        chip.append(input, el('span', '', w.word));
+        chips.appendChild(chip);
+      });
+    }
+    basic.addEventListener('change', function () { write('pr.basic', basic.checked); paint(); });
+    updateCount();
+    paint();
+    box.append(head, opts, chips);
+    return box;
+  }
+
+  function dateOf(iso) {
+    return new Date(iso).toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' });
+  }
+
+  function sentenceCell(v) {
+    var td = el('td', 'c-sent');
+    td.lang = 'en';
+    var esc = v.key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/'/g, "['’]");
+    var m = v.sentence.match(new RegExp('\\b' + esc + '\\b', 'i'));
+    if (!m) { td.textContent = v.sentence; return td; }
+    td.append(v.sentence.slice(0, m.index), el('mark', '', m[0]), v.sentence.slice(m.index + m[0].length));
+    return td;
+  }
+
+  function renderWords() {
+    var list = read('pr.vocab', []);
+    var rows = $('v-rows');
+    rows.textContent = '';
+    $('v-count').textContent = list.length;
+    $('v-empty').hidden = list.length > 0;
+    $('v-table').hidden = list.length === 0;
+    $('v-csv').disabled = list.length === 0;
+    $('v-clear').disabled = list.length === 0;
+    list.forEach(function (v) {
+      var tr = el('tr');
+      var word = el('td', 'c-word', v.word);
+      word.lang = 'en';
+      var del = el('button', 'btn quiet', '削除');
+      del.type = 'button';
+      del.setAttribute('aria-label', v.word + ' を削除');
+      del.addEventListener('click', function () {
+        write('pr.vocab', read('pr.vocab', []).filter(function (x) { return x.key !== v.key; }));
+        renderWords();
+      });
+      var cell = el('td', 'c-del');
+      cell.appendChild(del);
+      tr.append(word, sentenceCell(v), el('td', 'c-date', dateOf(v.at)), cell);
+      rows.appendChild(tr);
+    });
+  }
+
+  function csvCell(value) { return '"' + String(value).replace(/"/g, '""') + '"'; }
+
+  // The BOM lets Excel read the file as UTF-8.
+  function vocabCsv() {
+    var lines = [['単語', '出てきた文', '追加日'].map(csvCell).join(',')];
+    read('pr.vocab', []).forEach(function (v) {
+      lines.push([v.word, v.sentence, dateOf(v.at)].map(csvCell).join(','));
+    });
+    return '\ufeff' + lines.join('\r\n') + '\r\n';
+  }
+
+  var downloads = window.claude && window.claude.use ? window.claude.use('downloads') : Promise.resolve(null);
+
+  function saveCsv() {
+    var d = new Date();
+    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    var filename = 'pace-reader-words-' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '.csv';
+    var csv = vocabCsv();
+    var status = $('v-status');
+    status.textContent = '';
+    downloads.then(function (dl) {
+      if (dl) return dl.save({ filename: filename, data: csv }).then(function () { status.textContent = filename + ' を保存しました。'; });
+      var url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+      var a = el('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      status.textContent = filename + ' を保存しました。';
+    }).catch(function (e) {
+      status.textContent = e && e.code === 'declined'
+        ? '保存をキャンセルしました。'
+        : 'CSVを保存できませんでした。少し待ってからもう一度お試しください。';
+    });
+  }
+
+  /* ---------- Menu ---------- */
+  function average(list) {
+    var words = list.reduce(function (n, h) { return n + h.words; }, 0);
+    var ms = list.reduce(function (n, h) { return n + h.ms; }, 0);
+    return { count: list.length, wpm: list.length ? wpmOf(words, ms) : null };
+  }
+
+  function statCell(a) {
+    var td = el('td');
+    td.appendChild(el('b', '', a.wpm === null ? '–' : num(a.wpm)));
+    td.appendChild(el('small', '', a.count + '回'));
+    return td;
+  }
+
+  function renderAverages() {
+    var since = new Date();
+    since.setHours(0, 0, 0, 0);
+    since.setDate(since.getDate() - 4);
+    var all = read('pr.history', []);
+    var rows = $('m-rows');
+    rows.textContent = '';
+    ['多読', '速読', '音読'].forEach(function (m) {
+      var mine = all.filter(function (h) { return h.mode === m; });
+      var recent = mine.filter(function (h) { return new Date(h.at) >= since; });
+      var tr = el('tr');
+      var th = el('th', '', m);
+      th.scope = 'row';
+      tr.append(th, statCell(average(mine)), statCell(average(recent)));
+      rows.appendChild(tr);
+    });
+  }
+
+  function openMenu() {
+    if (historyOn) renderAverages();
+    $('menu').hidden = false;
+    $('scrim').hidden = false;
+    $('app').inert = true;
+    $('burger').setAttribute('aria-expanded', 'true');
+    $('menu-close').focus();
+  }
+  function closeMenu() {
+    $('menu').hidden = true;
+    $('scrim').hidden = true;
+    $('app').inert = false;
+    $('burger').setAttribute('aria-expanded', 'false');
+    $('burger').focus();
+  }
+
+  function pressed(group, value) {
+    Array.prototype.forEach.call($(group).children, function (b) {
+      b.setAttribute('aria-pressed', String(b.dataset.v === value));
+    });
+  }
+
+  var root = document.documentElement;
+  var hostTheme = root.getAttribute('data-theme');
+  var theme = read('pr.theme', 'auto');
+  var family = read('pr.family', 'serif');
+
+  function applyTheme() {
+    if (theme !== 'auto') root.setAttribute('data-theme', theme);
+    else if (hostTheme) root.setAttribute('data-theme', hostTheme);
+    else root.removeAttribute('data-theme');
+    pressed('m-theme', theme);
+  }
+  function applyFamily() {
+    if (family === 'sans') root.setAttribute('data-font', 'sans');
+    else root.removeAttribute('data-font');
+    pressed('m-font', family);
+  }
+
+  // The artifact viewer may write data-theme too. The choice made here wins; "auto" follows the viewer.
+  new MutationObserver(function () {
+    var cur = root.getAttribute('data-theme');
+    if (theme === 'auto') { hostTheme = cur; return; }
+    if (cur !== theme) { hostTheme = cur; root.setAttribute('data-theme', theme); }
+  }).observe(root, { attributes: true, attributeFilter: ['data-theme'] });
+
   /* ---------- Events ---------- */
+  $('nav-words').addEventListener('click', function () { renderWords(); show('words'); });
+  $('v-csv').addEventListener('click', saveCsv);
+  armed($('v-clear'), '本当に全削除', function () {
+    write('pr.vocab', []);
+    $('v-status').textContent = '';
+    renderWords();
+  });
+  $('burger').addEventListener('click', openMenu);
+  $('menu-close').addEventListener('click', closeMenu);
+  $('scrim').addEventListener('click', closeMenu);
+  Array.prototype.forEach.call($('m-theme').children, function (b) {
+    b.addEventListener('click', function () { theme = b.dataset.v; write('pr.theme', theme); applyTheme(); });
+  });
+  Array.prototype.forEach.call($('m-font').children, function (b) {
+    b.addEventListener('click', function () { family = b.dataset.v; write('pr.family', family); applyFamily(); });
+  });
   $('text').addEventListener('input', function () {
     refresh();
     clearTimeout(draftTimer);
@@ -815,6 +1216,10 @@ kbd {
   clickThenBlur('bigger', function () { fontSize = Math.min(33, fontSize + 2); applyFont(); });
 
   document.addEventListener('keydown', function (e) {
+    if (!$('menu').hidden) {
+      if (e.key === 'Escape') closeMenu();
+      return;
+    }
     if (counting) {
       if (e.key === 'Escape') cancelCountdown();
       else if (e.code === 'Space') e.preventDefault();
@@ -844,14 +1249,18 @@ kbd {
 
   /* ---------- Boot ---------- */
   if (!historyOn) {
-    $('nav').hidden = true;
+    $('nav-history').hidden = true;
     $('to-history').hidden = true;
+    $('m-stats').hidden = true;
+    $('m-note').textContent = '平均WPMはPCの履歴から集計します。スマホでは履歴を記録していないため、PCで開くと表示されます。';
     $('key-note').textContent = 'スタートの3秒後に計測が始まります。画面下のボタンで1文ずつ進みます。';
   }
   var draft = read('pr.draft', null);
   $('text').value = draft === null ? SAMPLE : draft;
   setMode(mode);
   applyFont();
+  applyTheme();
+  applyFamily();
   refresh();
 })();
 </script>
